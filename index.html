@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGIS Kecamatan Mengkendek - Yulianda Mellolo</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <style>
+        :root {
+            --toraja-red: #b30000;
+            --toraja-gold: #d4af37;
+            --toraja-black: #1a1a1a;
+            --white: #ffffff;
+        }
+
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        .wrapper { display: flex; height: 100vh; width: 100vw; }
+
+        #map { flex: 1; height: 100%; z-index: 1; }
+
+        .sidebar {
+            width: 350px; background: var(--toraja-black); color: var(--white);
+            display: flex; flex-direction: column; border-left: 4px solid var(--toraja-gold);
+            box-shadow: -5px 0 15px rgba(0,0,0,0.5); z-index: 2; overflow-y: auto;
+        }
+
+        .sidebar-header {
+            background: var(--toraja-red); padding: 20px; text-align: center;
+            border-bottom: 3px solid var(--toraja-gold);
+            background-image: radial-gradient(var(--toraja-gold) 1px, transparent 0);
+            background-size: 15px 15px;
+        }
+
+        .sidebar-content { padding: 20px; flex: 1; }
+
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 20px 0; }
+
+        .stat-box {
+            background: #2a2a2a; padding: 15px; border-radius: 8px; text-align: center;
+            border: 1px solid #444; transition: 0.3s;
+        }
+        .stat-box:hover { transform: translateY(-5px); border-color: var(--toraja-gold); }
+        .stat-box i { color: var(--toraja-gold); font-size: 1.2rem; margin-bottom: 5px; }
+        .stat-box div { font-size: 1.5rem; font-weight: bold; }
+
+        .filter-container { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+        .filter-btn {
+            background: #444; color: white; border: none; padding: 8px 12px;
+            border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.3s;
+        }
+        .filter-btn:hover { background: var(--toraja-red); }
+        .filter-btn.active { background: var(--toraja-red); border: 1px solid var(--toraja-gold); }
+
+        .location-item { padding: 10px; border-bottom: 1px solid #333; cursor: pointer; transition: 0.2s; }
+        .location-item:hover { background: #333; color: var(--toraja-gold); }
+
+        .sidebar-footer {
+            background: #000; padding: 15px; font-size: 13px;
+            border-top: 1px solid var(--toraja-gold); color: #aaa;
+        }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+    <div id="map"></div>
+
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2 style="margin:0; color:var(--toraja-gold)">KECAMATAN MENGKENDEK</h2>
+            <small>Tugas Akhir - Sistem Informasi Geografis</small>
+        </div>
+
+        <div class="sidebar-content">
+            <h3 style="color: var(--toraja-gold); border-bottom: 1px solid var(--toraja-gold);">Profil Wilayah</h3>
+            <p style="font-size: 14px; line-height: 1.6; text-align: justify; color: #ccc;">
+                Kecamatan Mengkendek merupakan wilayah strategis di Kabupaten Tana Toraja yang berfungsi sebagai pusat pendidikan dan gerbang transportasi udara. 
+            </p>
+            
+            <p><strong><i class="fa fa-users"></i> Populasi:</strong> ±35.000 Jiwa</p>
+
+            <div class="stats-grid">
+                <div class="stat-box"><i class="fa fa-school"></i><div>7</div><small>SD</small></div>
+                <div class="stat-box"><i class="fa fa-graduation-cap"></i><div>4</div><small>SMP</small></div>
+                <div class="stat-box"><i class="fa fa-university"></i><div>2</div><small>SMA</small></div>
+                <div class="stat-box"><i class="fa fa-church"></i><div>5</div><small>Gereja</small></div>
+            </div>
+
+            <h3 style="color: var(--toraja-gold);">Filter Instansi</h3>
+            <div class="filter-container">
+                <button class="filter-btn active" onclick="filterMap('all', this)">Semua</button>
+                <button class="filter-btn" onclick="filterMap('SD', this)">SD</button>
+                <button class="filter-btn" onclick="filterMap('SMP', this)">SMP</button>
+                <button class="filter-btn" onclick="filterMap('SMA', this)">SMA</button>
+                <button class="filter-btn" onclick="filterMap('Gereja', this)">Gereja</button>
+            </div>
+
+            <h3 style="color: var(--toraja-gold);">Daftar Lokasi</h3>
+            <div id="location-list"></div>
+        </div>
+
+        <div class="sidebar-footer">
+            <strong>Dikembangkan Oleh:</strong><br>
+            <span style="color:var(--toraja-gold); font-size: 15px;">Yulianda Mellolo</span><br>
+            NIM: 241011060020
+        </div>
+    </div>
+</div>
+
+<script src="./index_files/ADMINISTRASIKECAMATAN_AR_50K_1.js"></script>
+
+<script>
+    // 1. Inisialisasi Peta
+    var map = L.map('map').setView([-3.18, 119.89], 12);
+
+    // 2. Kontrol Basemap
+    var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
+
+    L.control.layers({"OpenStreetMap": osm, "Satellite Imagery": satellite}).addTo(map);
+
+    // 3. Dataset (SMPN 1 Mengkendek telah dihapus sepenuhnya)
+    const locations = [
+        { name: "SDN 140 Patengko", type: "SD", coords: [-3.233286, 119.898854], color: "blue" },
+        { name: "SDN 4 Mengkendek", type: "SD", coords: [-3.121145264239422, 119.89648637519683], color: "blue" },
+        { name: "SDN 143 Inpres Ge'tengan", type: "SD", coords: [-3.181708703752216, 119.88334628071036], color: "blue" },
+        { name: "SDN 145 Randanan", type: "SD", coords: [-3.1422232951922613, 119.87346275557954], color: "blue" },
+        { name: "SDN 152 Tampo", type: "SD", coords: [-3.2140927929446867, 119.89945966536612], color: "blue" },
+        { name: "SDN 153 Simbuang", type: "SD", coords: [-3.1787141995494737, 119.93833393652982], color: "blue" },
+        { name: "SDN 157 Baturondon", type: "SD", coords: [-3.1593894350504246, 119.85233801013628], color: "blue" },
+        { name: "SMPN 3 Tampo", type: "SMP", coords: [-3.1995224712281036, 119.90985797379537], color: "green" },
+        { name: "SMP PGRI Marinding", type: "SMP", coords: [-3.130645468608527, 119.90951688256288], color: "green" },
+        { name: "SMP Katolik Minanga", type: "SMP", coords: [-3.1668948731113447, 119.88489753652976], color: "green" },
+        { name: "SMP PGRI Buntudatu", type: "SMP", coords: [-3.24354088707042, 119.88912376721909], color: "green" },
+        { name: "SMAN 3 Tana Toraja", type: "SMA", coords: [-3.181082622970802, 119.88633035135213], color: "purple" },
+        { name: "SMAS PGRI Ge'tengan", type: "SMA", coords: [-3.1378298290987745, 119.90397345928517], color: "purple" },
+        { name: "Gereja Toraja Jemaat Silo Ge'tengan", type: "Gereja", coords: [-3.1800339505149586, 119.88362054579379], icon: "church" },
+        { name: "Gereja Toraja Jemaat Kandora", type: "Gereja", coords: [-3.140012456831407, 119.88738263177981], icon: "church" },
+        { name: "Gereja Toraja Jemaat Buntu Marinding", type: "Gereja", coords: [-3.1426570190280807, 119.91143974764633], icon: "church" },
+        { name: "Gereja Toraja Jemaat Pa'tengko", type: "Gereja", coords: [-3.219329646787864, 119.88820678626902], icon: "church" },
+        { name: "Gereja Kibaid Ge'tengan", type: "Gereja", coords: [-3.1818053037898335, 119.8833227549081], icon: "church" }
+    ];
+
+    var markerLayer = L.layerGroup().addTo(map);
+
+    function createMarker(loc) {
+        let iconHtml = loc.type === 'Gereja' 
+            ? `<div style="color:var(--toraja-red); font-size:20px;"><i class="fa fa-church"></i></div>`
+            : `<div style="background:${loc.color}; width:12px; height:12px; border-radius:50%; border:2px solid gold;"></div>`;
+
+        return L.marker(loc.coords, {
+            icon: L.divIcon({ html: iconHtml, className: 'custom-marker', iconSize: [20, 20] })
+        }).bindPopup(`<strong style="color:red">${loc.name}</strong><br>Kategori: ${loc.type}`);
+    }
+
+    // 4. Polygon Wilayah
+    if (typeof json_ADMINISTRASIKECAMATAN_AR_50K_1 !== 'undefined') {
+        L.geoJson(json_ADMINISTRASIKECAMATAN_AR_50K_1, {
+            style: { color: "#d4af37", weight: 2, fillOpacity: 0.1, fillColor: "#000" },
+            onEachFeature: function(feature, layer) {
+                layer.bindPopup("Wilayah Kecamatan Mengkendek");
+                layer.on('mouseover', () => layer.setStyle({ fillOpacity: 0.3, fillColor: "#b30000" }));
+                layer.on('mouseout', () => layer.setStyle({ fillOpacity: 0.1, fillColor: "#000" }));
+            }
+        }).addTo(map);
+    }
+
+    // 5. Logika Filter & Sidebar
+    function renderApp(filterType) {
+        const listDiv = document.getElementById('location-list');
+        listDiv.innerHTML = '';
+        markerLayer.clearLayers();
+
+        locations.forEach(loc => {
+            if (filterType === 'all' || loc.type === filterType) {
+                let m = createMarker(loc);
+                markerLayer.addLayer(m);
+
+                let item = document.createElement('div');
+                item.className = 'location-item';
+                item.innerHTML = `<i class="fa fa-map-pin"></i> ${loc.name}`;
+                item.onclick = () => { map.flyTo(loc.coords, 16); m.openPopup(); };
+                listDiv.appendChild(item);
+            }
+        });
+    }
+
+    function filterMap(type, btn) {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderApp(type);
+    }
+
+    renderApp('all');
+</script>
+</body>
+</html>
